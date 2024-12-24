@@ -2,9 +2,9 @@ import requests
 import json
 import boto3
 import os
+from conversation_util import find_conversation_and_communicate
 
 client = boto3.client('sqs')
-dynamodb = boto3.resource('dynamodb')
 
 def push_event(msg):
 
@@ -86,15 +86,6 @@ def contacts(contact_list):
         print('wa_id --', cl['wa_id'])
     return names
 
-def get_conversation(mobile, date):
-    try:
-        table = dynamodb.Table('conversation')
-        response = table.get_item(
-            Key={'mobile': mobile, 'cr_date': date})
-    except Exception as e:
-        print(e.response['Error']['Message'])
-    else:
-        return response['Item'] if 'Item' in response else None
 
 def readable(event):
     if event['type'] == 'text':
@@ -173,7 +164,14 @@ def lambda_handler(event, context):
                 if content.startswith('get='):
                     data = {'query': content.replace('get=',''), 'source': 'whatsapp', 'to_mobile': mobile, 'msg_id': msg_id}
                     return query_result(data)
-                msg_data = {'mobile': mobile, 'template': 't_greeting'}
+                # msg_data = {'mobile': mobile, 'template': 't_greeting'}
+                # send_msg(msg_data)
+                chat_response = find_conversation_and_communicate(mobile[2:], c_name, content)
+                if chat_response["success"]:
+                    text = chat_response.get('content')
+                else:
+                    text = 'Services are currently down, please try again after sometime.'
+                msg_data = {'mobile': mobile, 'text': text}
                 send_msg(msg_data)
             elif event_type == 'button':
                 button = message['button']
@@ -183,7 +181,7 @@ def lambda_handler(event, context):
                 send_msg(msg_data)
             else:
                 return {'statusCode': 200, 'body': 'ok'}
-            sqs_payload = {'mobile': mobile, 'c_name': c_name, 'm_id': msg_id, 'timestamp': timestamp, 'type': event_type, 'content': content}
-            push_event(sqs_payload)
+            # sqs_payload = {'mobile': mobile, 'c_name': c_name, 'm_id': msg_id, 'timestamp': timestamp, 'type': event_type, 'content': content}
+            # push_event(sqs_payload)
         
     return {'statusCode': 200, 'body': 'ok'}
